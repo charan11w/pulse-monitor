@@ -1,5 +1,5 @@
-import {Request, Response, NextFunction} from 'express';
-import { AppError } from '../utils/app-error';
+import {NextFunction, Request, Response} from 'express';
+import { AppError } from '../utils/app-error.js';
 
 export const ErrorMiddleWare=(
   error:unknown,
@@ -7,6 +7,8 @@ export const ErrorMiddleWare=(
   res:Response,
   next:NextFunction
 )=>{
+  void next;
+
   if (error instanceof AppError) {
     return res.status(error.statusCode).json({
       success:false,
