@@ -1,8 +1,8 @@
-import {Request,Response} from 'express';
+import { Request, Response } from "express";
 
-export const exampleController=(req:Request,res:Response)=>{
+export const exampleController = (req: Request, res: Response) => {
   return res.status(200).json({
-    success:true,
-    data:req.body
-  })
-}
+    success: true,
+    data: req.body,
+  });
+};

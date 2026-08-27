@@ -8,7 +8,9 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "keywords": [],
   "author": "",
@@ -24,6 +26,7 @@
     "@types/express": "^5.0.6",
     "@types/node": "^26.3.0",
     "eslint": "^9.39.5",
+    "prettier": "^3.9.6",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.68.0"
