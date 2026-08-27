@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Request, Response, NextFunction } from "express";
 
-const resquestIdMiddleware = (
+const requestIdMiddleware = (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -9,8 +9,9 @@ const resquestIdMiddleware = (
   const requestId = `req_${randomUUID()}`;
 
   req.requestId = requestId;
+  res.setHeader("x-request-id", requestId);
 
   next();
 };
 
-export default resquestIdMiddleware;
+export default requestIdMiddleware;
