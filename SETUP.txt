@@ -1,0 +1,128 @@
+﻿PulseMonitor - local setup (phase 2)
+===================================
+
+Current scope: Express foundation plus local PostgreSQL tooling.
+Frontend, Redis/BullMQ, authentication endpoints and live dashboard are later phases.
+Phase 2 verified: local PostgreSQL startup, migrations, repeatable seed, constraints and stop/start persistence all passed.
+
+Prerequisites
+-------------
+Node.js 22 (tested locally with 22.23.2), npm, Docker Desktop with Linux containers
+and Docker Compose. Windows installation:
+https://docs.docker.com/desktop/setup/install/windows-install/
+
+From the project root:
+  cd backend
+  npm ci
+  npm run db:init
+  npm run db:generate
+  npm run typecheck
+  npm test
+
+db:init creates ../.env with random local credentials if missing, or preserves and
+validates the existing file. It never prints the generated values. Do not commit
+or share .env. The root .env.example lists the required fields.
+
+There are two environment files:
+- Root .env: local Docker database and seed credentials.
+- backend/.env: existing API settings; phase 2 tooling does not modify this file.
+
+Database commands construct a loopback-only DATABASE_URL from root .env. They do
+not use an unrelated DATABASE_URL from backend/.env or the parent shell.
+
+After Docker Desktop reports its engine is running:
+  npm run db:start
+  npm run db:migrate
+  npm run seed
+  npm run seed
+  npm run db:migrations
+  npm run test:db
+
+Verified behavior:
+- db:start waits for a healthy PostgreSQL container.
+- Both migrations apply.
+- On a fresh database, first seed inserts 5 events; the second inserts 0.
+- test:db reports its checks passed and removes only its isolated test schema.
+- Existing users, projects, events, credentials and revoked keys are preserved.
+
+Database verification creates a randomly named schema in the same local database,
+applies the migrations there and verifies real constraints and seed behavior.
+Its cleanup drops only that generated schema, not public or your demo records.
+
+Check persistence:
+  npm run db:snapshot
+  npm run db:stop
+  npm run db:start
+  npm run db:snapshot
+
+The two snapshots should show matching row counts and fingerprints, provided no
+other process modified the database between them. Stop/start retains the volume.
+
+Run the current API separately:
+  npm run build
+  npm start
+  # In another terminal: curl.exe -i http://localhost:3000/health
+
+The existing npm run dev watcher has a tsx/uv_os_get_passwd error in this agent's
+Windows environment. Compiling and running with npm start is verified.
+
+Database details
+----------------
+Compose service: postgres
+Image: postgres:17.11-alpine3.23 (startup and database checks verified)
+Host endpoint: 127.0.0.1:5433 by default
+Container port: 5432
+User/database: pulsemonitor
+Volume: Compose-managed postgres_data
+Health probe: pg_isready
+Local demo owner: demo@pulsemonitor.local
+Demo password/API key: SEED_PASSWORD and SEED_API_KEY in root .env, not printed.
+
+Use a database viewer with these local settings if desired. Do not share the
+connection password. No viewer or hosted account is required.
+
+Seed records use reserved stable IDs. Rerunning seed does not rotate passwords,
+reactivate revoked keys, overwrite project edits, refresh old event timestamps or
+delete unrelated data. Changing SEED_PASSWORD/SEED_API_KEY after the first seed
+does not change existing database credentials. Authentication is still phase 3.
+
+The new migration changes event uniqueness from eventId globally to
+(projectId, eventId). A retry in one project conflicts; another project may use
+the same event ID. This alone does not implement the future telemetry worker.
+
+Troubleshooting and data safety
+------------------------------
+- Docker not found: install/start Docker Desktop and reopen the terminal/editor.
+- Docker engine unavailable: wait for startup; use Linux containers/WSL 2.
+- Port conflict: change POSTGRES_PORT in root .env before starting this container.
+- Changing POSTGRES_PASSWORD in .env does not change an already initialized
+  database password. Keep the original value unless deliberately rotating it.
+- Use npm run db:status to check the service and npm run db:migrations for history.
+- Do not use prisma migrate reset or docker compose down -v as normal setup.
+  Reset/drop-volume commands delete data. No automatic reset command is provided.
+
+Tests
+-----
+npm test: 22 non-database checks pass as of this phase's implementation.
+npm run typecheck: backend and Prisma scripts pass.
+npm run db:validate: Prisma schema validation passes.
+npm run test:db: all six live database verification groups passed with Docker/PostgreSQL.
+
+All Markdown documents are ignored by Git at the owner's request. Local planning
+and learning notes stay on the author's machine. This SETUP.txt is shareable.
+
+Windows: Docker installed but engine not running
+------------------------------------------------
+Check: wsl --version
+If WSL is missing, open PowerShell as administrator and run:
+  wsl --install --no-distribution
+Restart Windows when prompted. Then run:
+  wsl --update
+  wsl --version
+Open Docker Desktop, complete its first-run prompts and use the WSL 2 engine.
+Reopen your terminal and run docker version; both Client and Server must appear.
+A separate Ubuntu distribution is not required for commands from PowerShell.
+Official guidance:
+https://learn.microsoft.com/en-us/windows/wsl/basic-commands
+https://docs.docker.com/desktop/features/wsl/
+

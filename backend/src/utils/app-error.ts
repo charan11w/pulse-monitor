@@ -1,14 +1,11 @@
-export class AppError extends Error{
-  statusCode:number;
-  code:string;
-
-  constructor(message:string,statusCode:number,code:string){
-    //initiate message in the parent;
+// Use intentional, client-safe messages for expected 4xx failures.
+export class AppError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode: number,
+    public readonly code: string,
+  ) {
     super(message);
-
-
-    this.statusCode=statusCode;
-    this.code=code
+    this.name = 'AppError';
   }
-
 }

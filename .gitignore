@@ -8,9 +8,16 @@ build/
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # Logs
 *.log
+
+# Keep Markdown planning and learning files local.
+*.[mM][dD]
+
+# Compiled Prisma seed and verification scripts
+dist-prisma/
 
 # OS files
 .DS_Store

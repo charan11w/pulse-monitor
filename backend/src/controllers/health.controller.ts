@@ -1,7 +1,5 @@
-import {Request,Response} from 'express';
+import type { RequestHandler } from 'express';
 
-export const healthController=(req:Request, res:Response) =>{
-  res.status(200).json({
-    success:true
-  })
-}
+export const healthController: RequestHandler = (_req, res) => {
+  res.status(200).json({ success: true });
+};

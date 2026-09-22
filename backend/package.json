@@ -7,8 +7,20 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "typecheck": "tsc --noEmit",
-    "seed": "tsx prisma/seed.ts"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.prisma.json --noEmit",
+    "test": "npm run build && node --test tests/*.test.cjs",
+    "db:init": "node scripts/local-db.cjs init",
+    "db:start": "node scripts/local-db.cjs start",
+    "db:stop": "node scripts/local-db.cjs stop",
+    "db:status": "node scripts/local-db.cjs status",
+    "db:generate": "node scripts/local-db.cjs generate",
+    "db:validate": "node scripts/local-db.cjs validate",
+    "db:migrate": "node scripts/local-db.cjs migrate",
+    "db:migrations": "node scripts/local-db.cjs migrations",
+    "db:build": "tsc -p tsconfig.prisma.json",
+    "seed": "npm run db:build && node scripts/local-db.cjs seed",
+    "test:db": "npm run db:build && node scripts/local-db.cjs verify",
+    "db:snapshot": "npm run db:build && node scripts/local-db.cjs snapshot"
   },
   "keywords": [],
   "author": "",
@@ -16,12 +28,16 @@
   "type": "commonjs",
   "dependencies": {
     "@prisma/client": "^6.12.0",
+    "argon2": "^0.45.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "prisma": "^6.12.0"
+    "jsonwebtoken": "^9.0.3",
+    "prisma": "^6.12.0",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.3.0",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2"

@@ -1,30 +1,47 @@
-import {Request, Response, NextFunction} from 'express';
-import { AppError } from '../utils/app-error';
+import type { ErrorRequestHandler } from 'express';
+import { AppError } from '../utils/app-error.js';
 
-export const ErrorMiddleWare=(
-  error:unknown,
-  req:Request,
-  res:Response,
-  next:NextFunction
-)=>{
-  if (error instanceof AppError) {
-    return res.status(error.statusCode).json({
-      success:false,
-      error:{
-        code:error.code,
-        message:error.message,
-        requestId:req.requestId
-      }
-    })
+export const errorMiddleware: ErrorRequestHandler = (error: unknown, req, res, next) => {
+  if (res.headersSent) {
+    return next(error);
   }
 
-  console.error(error);
-  return res.status(500).json({
-    success:false,
-    error:{
-      code:'INTERNAL_SERVER_ERROR',
-      message:"Internal Server Error",
-      requestId:req.requestId
+  let status = 500;
+  let code = 'INTERNAL_SERVER_ERROR';
+  let message = 'Internal Server Error';
+
+  if (error instanceof AppError && error.statusCode >= 400 && error.statusCode < 500) {
+    status = error.statusCode;
+    code = error.code;
+    message = error.message;
+  } else if (error instanceof Error && 'type' in error) {
+    // Parser errors can contain raw bodies. Never echo or log that object.
+    switch (error.type) {
+      case 'entity.parse.failed':
+        status = 400;
+        code = 'INVALID_JSON';
+        message = 'Request body must be valid JSON';
+        break;
+      case 'entity.too.large':
+        status = 413;
+        code = 'PAYLOAD_TOO_LARGE';
+        message = 'Request body exceeds the 100kb limit';
+        break;
+      case 'charset.unsupported':
+      case 'encoding.unsupported':
+        status = 415;
+        code = 'UNSUPPORTED_ENCODING';
+        message = 'Unsupported request encoding';
+        break;
     }
-  })
-}
+  }
+
+  if (status >= 500) {
+    console.error(JSON.stringify({ event: 'request_failed', requestId: req.requestId, code }));
+  }
+
+  res.status(status).json({
+    success: false,
+    error: { code, message, requestId: req.requestId },
+  });
+};

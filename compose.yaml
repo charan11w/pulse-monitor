@@ -1,0 +1,23 @@
+name: pulsemonitor
+
+services:
+  postgres:
+    image: postgres:17.11-alpine3.23
+    environment:
+      POSTGRES_USER: pulsemonitor
+      POSTGRES_DB: pulsemonitor
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run npm run db:init in backend first}
+    ports:
+      # Host Node/Prisma can connect; other computers cannot.
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pulsemonitor -d pulsemonitor"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  postgres_data:

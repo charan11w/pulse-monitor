@@ -1,8 +1,6 @@
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
+import { parseEnv } from './env-schema.js';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
-const PORT=process.env.PORT || 3000;
-const NODE_ENV=process.env.NODE_ENV || "development";
-
-export { PORT, NODE_ENV };
+export const { PORT, NODE_ENV } = parseEnv(process.env);
