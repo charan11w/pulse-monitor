@@ -11,6 +11,10 @@ const envPath = path.join(rootDir, '.env');
 function readLocalConfig(text) {
   const values = dotenv.parse(text);
   const port = values.POSTGRES_PORT || '5433';
+  const redisPort = values.REDIS_PORT || '6380';
+  if (!/^\d+$/.test(redisPort) || Number(redisPort) < 1 || Number(redisPort) > 65535) {
+    throw new Error('REDIS_PORT must be an integer between 1 and 65535.');
+  }
   if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
     throw new Error('POSTGRES_PORT must be an integer between 1 and 65535.');
   }
@@ -24,6 +28,8 @@ function readLocalConfig(text) {
   return {
     ...values,
     POSTGRES_PORT: port,
+    REDIS_PORT: redisPort,
+    REDIS_URL: 'redis://127.0.0.1:' + redisPort,
     // Never use DATABASE_URL from an existing backend/.env or parent shell.
     DATABASE_URL: 'postgresql://pulsemonitor:' + encodeURIComponent(values.POSTGRES_PASSWORD)
       + '@127.0.0.1:' + port + '/pulsemonitor?schema=public',
@@ -67,6 +73,16 @@ function main(action) {
   switch (action) {
     case 'init': return;
     case 'serve': return run(process.execPath, ['dist/server.js'], env);
+    case 'worker': return run(process.execPath, ['dist/worker.js'], env);
+    case 'demo-api': return run(process.execPath, ['dist/demo/server.js'], env);
+    case 'demo-traffic': return run(process.execPath, ['dist/demo/run-traffic.js'], env);
+    case 'demo': return run(process.execPath, ['scripts/demo.cjs'], env);
+    case 'queue-test': return run(process.execPath, ['--test', 'tests/integration/queue.test.cjs'], env);
+    case 'redis-verify': return run(process.execPath, ['scripts/verify-redis.cjs'], env);
+    case 'services-start': return run('docker', [...compose, 'up', '-d', '--wait', 'postgres', 'redis'], env);
+    case 'services-stop': return run('docker', [...compose, 'stop', 'postgres', 'redis'], env);
+    case 'redis-stop': return run('docker', [...compose, 'stop', 'redis'], env);
+    case 'redis-start': return run('docker', [...compose, 'up', '-d', '--wait', 'redis'], env);
     case 'dev': return run(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'watch', 'src/server.ts'], env);
     case 'auth-test': return run(process.execPath, ['--test', 'tests/integration/auth.test.cjs'], env);
     case 'projects-test': return run(process.execPath, ['--test', 'tests/integration/projects.test.cjs'], env);

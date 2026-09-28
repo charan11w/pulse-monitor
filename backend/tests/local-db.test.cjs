@@ -22,6 +22,12 @@ test('local DB configuration supports a custom local port', () => {
   assert.equal(new URL(readLocalConfig(secrets + '\nPOSTGRES_PORT=5444').DATABASE_URL).port, '5444');
 });
 
+test('Redis configuration is loopback-only and validates its port', () => {
+  assert.equal(readLocalConfig(secrets + '\nREDIS_URL=redis://remote.example').REDIS_URL, 'redis://127.0.0.1:6380');
+  assert.equal(readLocalConfig(secrets + '\nREDIS_PORT=6381').REDIS_URL, 'redis://127.0.0.1:6381');
+  assert.throws(() => readLocalConfig(secrets + '\nREDIS_PORT=70000'), /REDIS_PORT/);
+});
+
 test('local DB configuration rejects invalid ports and placeholder credentials', () => {
   for (const port of ['0', '65536', 'NaN', '5433/remote']) {
     assert.throws(() => readLocalConfig(secrets + '\nPOSTGRES_PORT=' + port), /POSTGRES_PORT/);

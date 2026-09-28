@@ -19,5 +19,20 @@ services:
       retries: 10
       start_period: 10s
 
+  redis:
+    image: redis:7.4.11-alpine3.21
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
 volumes:
   postgres_data:
+  redis_data:

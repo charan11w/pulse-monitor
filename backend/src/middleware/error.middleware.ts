@@ -10,7 +10,8 @@ export const errorMiddleware: ErrorRequestHandler = (error: unknown, req, res, n
   let code = 'INTERNAL_SERVER_ERROR';
   let message = 'Internal Server Error';
 
-  if (error instanceof AppError && error.statusCode >= 400 && error.statusCode < 500) {
+  if (error instanceof AppError && ((error.statusCode >= 400 && error.statusCode < 500) ||
+      (error.statusCode === 503 && ['QUEUE_UNAVAILABLE', 'QUEUE_FULL'].includes(error.code)))) {
     status = error.statusCode;
     code = error.code;
     message = error.message;
