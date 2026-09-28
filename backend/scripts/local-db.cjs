@@ -69,6 +69,7 @@ function main(action) {
     case 'serve': return run(process.execPath, ['dist/server.js'], env);
     case 'dev': return run(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'watch', 'src/server.ts'], env);
     case 'auth-test': return run(process.execPath, ['--test', 'tests/integration/auth.test.cjs'], env);
+    case 'projects-test': return run(process.execPath, ['--test', 'tests/integration/projects.test.cjs'], env);
     case 'start': return run('docker', [...compose, 'up', '-d', '--wait', 'postgres'], env);
     case 'stop': return run('docker', [...compose, 'stop', 'postgres'], env);
     case 'status': return run('docker', [...compose, 'ps'], env);

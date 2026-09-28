@@ -1,7 +1,7 @@
-PulseMonitor - local setup (phase 3)
+PulseMonitor - local setup (phase 4)
 ===================================
 
-Current scope: Express foundation, local PostgreSQL and session authentication.
+Current scope: Express foundation, local PostgreSQL, sessions, projects and API keys.
 Frontend, Redis/BullMQ and live dashboard are later phases.
 Phase 2 verified: local PostgreSQL startup, migrations, repeatable seed, constraints and stop/start persistence all passed.
 
@@ -40,7 +40,7 @@ After Docker Desktop reports its engine is running:
 
 Verified behavior:
 - db:start waits for a healthy PostgreSQL container.
-- All three migrations apply, including session storage.
+- All four migrations apply, including sessions and project/key lookup indexes.
 - On a fresh database, first seed inserts 5 events; the second inserts 0.
 - test:db reports its checks passed and removes only its isolated test schema.
 - Existing users, projects, events, credentials and revoked keys are preserved.
@@ -122,6 +122,49 @@ The new migration changes event uniqueness from eventId globally to
 (projectId, eventId). A retry in one project conflicts; another project may use
 the same event ID. This alone does not implement the future telemetry worker.
 
+Projects and API keys exercise (Windows PowerShell, from backend/)
+----------------------------------------------------------------
+Keep npm start running. This creates a local project and a key, then revokes only
+that new key. Existing demo project and seed key are left intact. Each run adds
+another exercise project; there is no project-delete endpoint in this small scope.
+
+  $demoPassword = (Get-Content ../.env | Where-Object { $_ -like 'SEED_PASSWORD=*' }).Split('=', 2)[1]
+  $loginBody = @{ email = 'demo@pulsemonitor.local'; password = $demoPassword } | ConvertTo-Json
+  $authHeaders = @{ 'X-PulseMonitor-Request' = '1' }
+  Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/v1/auth/login -ContentType application/json -Headers $authHeaders -Body $loginBody -SessionVariable demoSession | Out-Null
+  $projectBody = @{ name = 'Phase 4 exercise'; environment = 'development' } | ConvertTo-Json
+  $createdProject = Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/v1/projects -ContentType application/json -Headers $authHeaders -Body $projectBody -WebSession $demoSession
+  $projectId = $createdProject.project.id
+  Invoke-RestMethod -Uri "http://localhost:3000/api/v1/projects/$projectId" -WebSession $demoSession
+  Invoke-RestMethod -Uri 'http://localhost:3000/api/v1/projects?page=1&pageSize=20' -WebSession $demoSession
+  $keyBody = @{ name = 'Exercise key' } | ConvertTo-Json
+  $createdKey = Invoke-RestMethod -Method Post -Uri "http://localhost:3000/api/v1/projects/$projectId/keys" -ContentType application/json -Headers $authHeaders -Body $keyBody -WebSession $demoSession
+  $createdKey.apiKey
+  Invoke-RestMethod -Uri "http://localhost:3000/api/v1/projects/$projectId/keys" -WebSession $demoSession
+  $keyId = $createdKey.apiKey.id
+  Invoke-RestMethod -Method Post -Uri "http://localhost:3000/api/v1/projects/$projectId/keys/$keyId/revoke" -Headers $authHeaders -WebSession $demoSession
+  Invoke-RestMethod -Uri "http://localhost:3000/api/v1/projects/$projectId/keys" -WebSession $demoSession
+  Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/v1/auth/logout -Headers $authHeaders -WebSession $demoSession
+  Remove-Variable demoPassword,loginBody,demoSession,createdKey
+
+Expected: project/key creation returns 201; reads return 200; revoke returns 204.
+The creation response includes rawKey (kept in $createdKey in the exercise) and
+safe apiKey metadata. The raw key cannot be retrieved again. Lists show only
+id/name/keyPrefix/createdAt/revokedAt, never the hash or raw credential. After
+revocation, revokedAt contains a timestamp. Repeated revocation returns 204.
+
+Project and key lists accept page=1..1000 and pageSize=1..50 (default 20) and
+return page/pageSize/hasMore. Records are sorted newest first with ID tie-breaking.
+Project names and key names: 1-80 trimmed characters; descriptions: up to 500.
+Environment: development (default), test, staging or production. Unknown fields
+are rejected. Missing and unowned project IDs both return 404.
+
+User sessions manage projects/keys. The API-key helper will authenticate the
+phase-5 ingestion route from X-API-Key, deriving the project from the database.
+There is no ingestion endpoint yet. Do not put raw keys in Git, public frontend
+bundles or URL queries. Revocation rejects subsequent authentication but cannot
+cancel already authenticated requests or previously accepted jobs.
+
 Troubleshooting and data safety
 ------------------------------
 - Docker not found: install/start Docker Desktop and reopen the terminal/editor.
@@ -137,6 +180,7 @@ Tests
 -----
 npm test: 23 non-database checks pass as of this phase's implementation.
 npm run test:auth: 9 authentication tests pass against an isolated local schema.
+npm run test:projects: 11 project/key tests pass against an isolated local schema.
 npm run typecheck: backend and Prisma scripts pass.
 npm run db:validate: Prisma schema validation passes.
 npm run test:db: all six live database verification groups passed with Docker/PostgreSQL.

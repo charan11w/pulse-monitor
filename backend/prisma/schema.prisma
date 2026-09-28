@@ -40,19 +40,23 @@ model Project {
   apiKeys          ApiKey[]
   telemetryEvents  TelemetryEvent[]
   metricAggregates MetricAggregate[]
+
+  @@index([userId, createdAt, id])
 }
 
 model ApiKey {
   id        String    @id @default(uuid())
   projectId String
   name      String
-  keyHash   String
+  keyHash   String    @unique
   keyPrefix String
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   revokedAt DateTime?
 
   project Project @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, createdAt, id])
 }
 
 model TelemetryEvent {

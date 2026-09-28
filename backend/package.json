@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node scripts/local-db.cjs serve",
     "test:auth": "npm run build && node scripts/local-db.cjs auth-test",
+    "test:projects": "npm run build && node scripts/local-db.cjs projects-test",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.prisma.json --noEmit",
     "test": "npm run build && node --test tests/*.test.cjs",
     "db:init": "node scripts/local-db.cjs init",
