@@ -1,8 +1,8 @@
-﻿PulseMonitor - local setup (phase 2)
+PulseMonitor - local setup (phase 3)
 ===================================
 
-Current scope: Express foundation plus local PostgreSQL tooling.
-Frontend, Redis/BullMQ, authentication endpoints and live dashboard are later phases.
+Current scope: Express foundation, local PostgreSQL and session authentication.
+Frontend, Redis/BullMQ and live dashboard are later phases.
 Phase 2 verified: local PostgreSQL startup, migrations, repeatable seed, constraints and stop/start persistence all passed.
 
 Prerequisites
@@ -25,9 +25,9 @@ or share .env. The root .env.example lists the required fields.
 
 There are two environment files:
 - Root .env: local Docker database and seed credentials.
-- backend/.env: existing API settings; phase 2 tooling does not modify this file.
+- backend/.env: PORT/NODE_ENV/FRONTEND_ORIGIN; tooling does not modify this file.
 
-Database commands construct a loopback-only DATABASE_URL from root .env. They do
+Database commands and npm start/dev construct a loopback-only DATABASE_URL from root .env. They do
 not use an unrelated DATABASE_URL from backend/.env or the parent shell.
 
 After Docker Desktop reports its engine is running:
@@ -40,7 +40,7 @@ After Docker Desktop reports its engine is running:
 
 Verified behavior:
 - db:start waits for a healthy PostgreSQL container.
-- Both migrations apply.
+- All three migrations apply, including session storage.
 - On a fresh database, first seed inserts 5 events; the second inserts 0.
 - test:db reports its checks passed and removes only its isolated test schema.
 - Existing users, projects, events, credentials and revoked keys are preserved.
@@ -84,7 +84,39 @@ connection password. No viewer or hosted account is required.
 Seed records use reserved stable IDs. Rerunning seed does not rotate passwords,
 reactivate revoked keys, overwrite project edits, refresh old event timestamps or
 delete unrelated data. Changing SEED_PASSWORD/SEED_API_KEY after the first seed
-does not change existing database credentials. Authentication is still phase 3.
+does not change existing database credentials.
+
+Authentication exercise (verified in Windows PowerShell, from backend/)
+---------------------------------------------------------------------
+Keep npm start running in one terminal. In a second PowerShell terminal:
+
+  $demoPassword = (Get-Content ../.env | Where-Object { $_ -like 'SEED_PASSWORD=*' }).Split('=', 2)[1]
+  $loginBody = @{ email = 'demo@pulsemonitor.local'; password = $demoPassword } | ConvertTo-Json
+  $authHeaders = @{ 'X-PulseMonitor-Request' = '1' }
+  Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/v1/auth/login -ContentType application/json -Headers $authHeaders -Body $loginBody -SessionVariable demoSession
+  Invoke-RestMethod -Uri http://localhost:3000/api/v1/auth/me -WebSession $demoSession
+  Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/v1/auth/logout -Headers $authHeaders -WebSession $demoSession
+  Invoke-RestMethod -Uri http://localhost:3000/api/v1/auth/me -WebSession $demoSession
+  Remove-Variable demoPassword,loginBody,demoSession
+
+Expected: login and me return only user id/name/email; logout returns 204 with no
+body; the final me request reports 401 Unauthorized. Do not print the password,
+request body or cookie. Adjust port 3000 if you changed PORT. Ctrl+C stops the API.
+
+Sessions last eight hours. A new login replaces the previous login for that user.
+PostgreSQL stores only the token hash. Logout deletes that session server-side.
+Login allows ten attempts per IP per 15 minutes; 429 includes Retry-After. Limits
+are in memory, capped at 1,000 IP entries and reset when the API process restarts.
+
+Browser integration for the future frontend:
+- FRONTEND_ORIGIN defaults to http://localhost:5173. Set an exact origin with no
+  trailing slash in backend/.env. Use localhost for both frontend and API.
+- Send JSON on login; use credentials: 'include' on authenticated fetch calls.
+- POST requests require X-PulseMonitor-Request: 1. This and exact-origin CORS
+  protect cookie writes; SameSite=Strict adds another browser restriction.
+- Session cookies use HttpOnly. NODE_ENV=production also sets Secure, requiring
+  HTTPS. Use development mode for the local HTTP demo.
+- Real browser integration will be tested when the frontend exists in phase 8.
 
 The new migration changes event uniqueness from eventId globally to
 (projectId, eventId). A retry in one project conflicts; another project may use
@@ -103,7 +135,8 @@ Troubleshooting and data safety
 
 Tests
 -----
-npm test: 22 non-database checks pass as of this phase's implementation.
+npm test: 23 non-database checks pass as of this phase's implementation.
+npm run test:auth: 9 authentication tests pass against an isolated local schema.
 npm run typecheck: backend and Prisma scripts pass.
 npm run db:validate: Prisma schema validation passes.
 npm run test:db: all six live database verification groups passed with Docker/PostgreSQL.

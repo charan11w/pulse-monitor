@@ -16,6 +16,15 @@ model User {
   updatedAt    DateTime @updatedAt
 
   projects Project[]
+  session  Session?
+}
+
+model Session {
+  tokenHash String   @id
+  userId    String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Project {

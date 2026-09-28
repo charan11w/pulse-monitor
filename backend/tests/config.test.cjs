@@ -4,12 +4,12 @@ const { spawnSync } = require('node:child_process');
 const { parseEnv } = require('../dist/config/env-schema.js');
 
 test('configuration defaults are numeric port 3000 and development mode', () => {
-  assert.deepEqual(parseEnv({}), { PORT: 3000, NODE_ENV: 'development' });
+  assert.deepEqual(parseEnv({}), { PORT: 3000, NODE_ENV: 'development', FRONTEND_ORIGIN: 'http://localhost:5173' });
 });
 
 test('valid environment strings are parsed and unrelated variables ignored', () => {
   assert.deepEqual(parseEnv({ PORT: '4200', NODE_ENV: 'test', UNRELATED: 'value' }),
-    { PORT: 4200, NODE_ENV: 'test' });
+    { PORT: 4200, NODE_ENV: 'test', FRONTEND_ORIGIN: 'http://localhost:5173' });
 });
 
 test('invalid ports and modes fail with variable names but no submitted values', () => {
@@ -36,4 +36,13 @@ test('compiled server refuses invalid startup configuration', () => {
   assert.match(result.stderr, /Invalid environment configuration: PORT/);
   assert.ok(!result.stderr.includes('private-config-secret'));
   assert.ok(!result.stdout.includes('server_started'));
+});
+
+test('frontend origin must be an exact HTTP(S) origin', () => {
+  for (const value of ['*', 'null', 'file:///tmp', 'https://example.test/path', 'http://localhost:5173/']) {
+    assert.throws(() => parseEnv({ FRONTEND_ORIGIN: value }), {
+      message: 'Invalid environment configuration: FRONTEND_ORIGIN',
+    });
+  }
+  assert.equal(parseEnv({ FRONTEND_ORIGIN: 'https://example.test' }).FRONTEND_ORIGIN, 'https://example.test');
 });

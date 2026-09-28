@@ -32,7 +32,7 @@ async function main() {
   if (migrated.error || migrated.status !== 0) {
     throw new Error('Migration process failed.');
   }
-  console.log('PASS: both migrations applied to a fresh isolated schema.');
+  console.log('PASS: all migrations applied to a fresh isolated schema.');
   checks = new PrismaClient({ datasources: { db: { url: baseUrl.toString() } } });
   const db = checks;
 

@@ -4,9 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "node scripts/local-db.cjs dev",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "node scripts/local-db.cjs serve",
+    "test:auth": "npm run build && node scripts/local-db.cjs auth-test",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.prisma.json --noEmit",
     "test": "npm run build && node --test tests/*.test.cjs",
     "db:init": "node scripts/local-db.cjs init",

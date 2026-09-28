@@ -4,6 +4,12 @@ const envSchema = z.object({
   PORT: z.string().regex(/^\d+$/).default('3000')
     .transform(Number).pipe(z.number().int().min(1).max(65535)),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  FRONTEND_ORIGIN: z.string().url().refine((value) => {
+    try {
+      const url = new URL(value);
+      return ['http:', 'https:'].includes(url.protocol) && url.origin === value;
+    } catch { return false; }
+  }).default('http://localhost:5173'),
 });
 
 export function parseEnv(input: Record<string, string | undefined>) {
