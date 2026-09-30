@@ -10,6 +10,21 @@ const { runTraffic } = require('../dist/demo/traffic.js');
 const children = [];
 const db = new PrismaClient();
 let stage = 'configuration';
+const diagnostics = { acceptedBatches: 0, rejectedBatches: 0, completedBatches: 0, failedAttempts: 0, sdk: null, startupFailure: null };
+function observe(line) {
+  try {
+    const entry = JSON.parse(line);
+    if (entry.event === 'request_completed' && entry.path === '/batch') {
+      diagnostics[entry.status === 202 ? 'acceptedBatches' : 'rejectedBatches']++;
+    }
+    if (entry.event === 'batch_persisted') diagnostics.completedBatches++;
+    if (entry.event === 'batch_attempt_failed') diagnostics.failedAttempts++;
+    if (entry.event === 'demo_stopped') {
+      diagnostics.sdk = { captured: entry.captured, queued: entry.queued, dropped: entry.dropped,
+        retryAttempts: entry.retryAttempts, pending: entry.pending };
+    }
+  } catch { /* Only report known, non-secret counters. */ }
+}
 async function freePort() {
   const server = net.createServer();
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -20,20 +35,31 @@ function start(file, env, readyEvent) {
     const child = spawn(process.execPath, [file], { env: { ...process.env, ...env },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'], windowsHide: true });
     children.push(child);
-    const timer = setTimeout(() => reject(new Error('Child startup deadline exceeded')), 20000);
+    let ready = false;
+    const timer = setTimeout(() => {
+      diagnostics.startupFailure = 'deadline';
+      reject(new Error('Child startup deadline exceeded'));
+    }, 30000);
     const lines = readline.createInterface({ input: child.stdout });
+    lines.on('line', observe);
     lines.on('line', line => {
       try {
-        if (JSON.parse(line).event === readyEvent) { clearTimeout(timer); resolve(child); }
+        if (JSON.parse(line).event === readyEvent) { ready = true; clearTimeout(timer); resolve(child); }
       } catch { /* Never print arbitrary child output or secrets. */ }
     });
-    child.stderr.resume();
-    child.once('error', () => { clearTimeout(timer); reject(new Error('Child startup failed')); });
-    child.once('exit', () => { clearTimeout(timer); reject(new Error('Child exited during startup')); });
+    readline.createInterface({ input: child.stderr }).on('line', observe);
+    child.once('error', error => {
+      clearTimeout(timer); diagnostics.startupFailure = ['EACCES', 'EPERM', 'ENOENT'].includes(error.code) ? error.code : 'spawn';
+      reject(new Error('Child startup failed'));
+    });
+    child.once('exit', code => {
+      clearTimeout(timer);
+      if (!ready) { diagnostics.startupFailure = 'exit-' + code; reject(new Error('Child exited during startup')); }
+    });
   });
 }
 function stop(child) {
-  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  if (!child.pid || child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
   return new Promise(resolve => {
     const timer = setTimeout(() => child.kill(), 12000);
     child.once('exit', () => { clearTimeout(timer); resolve(); });
@@ -70,5 +96,9 @@ async function main() {
   console.log(JSON.stringify({ event: 'demo_verified', requests: count, stored, ...responses, service }));
   console.log('SDK -> HTTP API -> Redis/BullMQ -> independent worker -> PostgreSQL verified. Demo events remain available for later charts.');
 }
-main().catch(() => { console.error('Demo failed at: ' + stage + '. Check services, migrations/seed and the local demo key.'); process.exitCode = 1; })
+main().catch(error => {
+  console.error('Demo failed at: ' + stage + '. Check services, migrations/seed and the local demo key.');
+  console.error(JSON.stringify({ ...diagnostics, failure: error.name }));
+  process.exitCode = 1;
+})
   .finally(async () => { for (const child of children.reverse()) await stop(child); await db.$disconnect(); });

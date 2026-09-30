@@ -10,7 +10,7 @@ export async function runTraffic(baseUrl: string, count = 30) {
   for (let index = 0; index < count; index++) {
     const kind = index % 3;
     const path = kind === 0 ? `/items/${index}` : kind === 1 ? '/slow' : '/fail';
-    const response = await fetch(new URL(path, url), { signal: AbortSignal.timeout(3000), redirect: 'error' });
+    const response = await fetch(new URL(path, url), { signal: AbortSignal.timeout(10000), redirect: 'error' });
     await response.body?.cancel();
     if (response.status !== (kind === 2 ? 500 : 200)) throw new Error('Unexpected demo response');
     counts[kind === 0 ? 'normal' : kind === 1 ? 'slow' : 'failing']++;

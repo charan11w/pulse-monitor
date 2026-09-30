@@ -1,8 +1,9 @@
-PulseMonitor - local setup (phase 4)
+PulseMonitor - local setup (phase 6)
 ===================================
 
-Current scope: Express foundation, local PostgreSQL, sessions, projects and API keys.
-Frontend, Redis/BullMQ and live dashboard are later phases.
+Current scope: sessions/projects/keys, PostgreSQL, Redis/BullMQ ingestion and worker,
+plus an Express telemetry SDK and finite demo. Analytics, frontend and live charts
+remain later phases. No hosted services or cloud accounts are needed.
 Phase 2 verified: local PostgreSQL startup, migrations, repeatable seed, constraints and stop/start persistence all passed.
 
 Prerequisites
@@ -31,7 +32,7 @@ Database commands and npm start/dev construct a loopback-only DATABASE_URL from 
 not use an unrelated DATABASE_URL from backend/.env or the parent shell.
 
 After Docker Desktop reports its engine is running:
-  npm run db:start
+  npm run services:start
   npm run db:migrate
   npm run seed
   npm run seed
@@ -39,7 +40,7 @@ After Docker Desktop reports its engine is running:
   npm run test:db
 
 Verified behavior:
-- db:start waits for a healthy PostgreSQL container.
+- services:start waits for healthy PostgreSQL and Redis containers.
 - All four migrations apply, including sessions and project/key lookup indexes.
 - On a fresh database, first seed inserts 5 events; the second inserts 0.
 - test:db reports its checks passed and removes only its isolated test schema.
@@ -159,11 +160,102 @@ Project names and key names: 1-80 trimmed characters; descriptions: up to 500.
 Environment: development (default), test, staging or production. Unknown fields
 are rejected. Missing and unowned project IDs both return 404.
 
-User sessions manage projects/keys. The API-key helper will authenticate the
-phase-5 ingestion route from X-API-Key, deriving the project from the database.
-There is no ingestion endpoint yet. Do not put raw keys in Git, public frontend
+User sessions manage projects/keys. The ingestion endpoint authenticates from
+X-API-Key, deriving the project from the database.
+Do not put raw keys in Git, public frontend
 bundles or URL queries. Revocation rejects subsequent authentication but cannot
 cancel already authenticated requests or previously accepted jobs.
+
+Run the finite telemetry demo
+-----------------------------
+After setup/migrations/seed above, stop any manually started API, worker or demo
+processes, then run from backend/:
+  npm run demo
+
+This starts one API, one independent worker and a demo Express app on temporary
+local ports. It generates 30 requests (10 normal, 10 slow, 10 intentional 500s),
+flushes the SDK, verifies the matching 30 PostgreSQL events, then stops its Node
+child processes. PostgreSQL/Redis stay running. Successful output includes
+demo_verified with requests:30 and stored:30. This flow was verified locally.
+These are correctness counts, not a throughput benchmark. Each run adds fresh
+events with a unique demo service label for later charts.
+
+The seeded key is used by default. If revoked, create a key through phase 4 and
+put DEMO_API_KEY in the ignored root .env. Do not change SEED_API_KEY expecting
+the seed to rotate existing credentials. Optional DEMO_REQUESTS is 1-300; default 30.
+
+Separate-process learning exercise, from backend/ in separate terminals:
+  npm run build
+  npm start
+  npm run worker
+  npm run demo:api
+  npm run demo:traffic
+
+The last command sends a finite run and exits; it is not continuous load.
+API default: localhost:3000. Demo default: 127.0.0.1:4000.
+Do not run npm run demo alongside these processes: queue admission supports one
+API producer process. Stop Node processes with Ctrl+C when finished.
+
+To observe asynchronous processing: stop only the worker, run demo:traffic,
+then restart the worker. Accepted jobs wait in Redis and are persisted afterward.
+To observe SDK failure isolation: stop the collector API, keep demo:api running,
+and run demo:traffic. Business responses remain 200/500 as designed; telemetry
+can be dropped after bounded retries. Restart the collector and generate fresh traffic.
+
+Collector protocol and limits
+-----------------------------
+POST /api/v1/telemetry/batch with Content-Type: application/json, X-API-Key and
+body {"events":[...]}. There is no user-session/cookie requirement on this sender
+endpoint. Allowed event fields:
+  eventId: UUID; requestId: 1-80 letters/digits/_/-;
+  service: 1-64 letters/digits/_/-;
+  environment: development/test/staging/production;
+  route: normalized template such as /items/:id (maximum 160 characters, no query);
+  method: GET/POST/PUT/PATCH/DELETE/OPTIONS/HEAD;
+  statusCode: integer 100-599; responseTime: 0-60000 milliseconds;
+  timestamp: ISO date/time within the previous 24 hours or next five minutes.
+
+Only events may appear at the top level; projectId is derived from the API key.
+Maximum 50 events per batch and 100kb JSON body. 202/status:queued means Redis
+acknowledged admission, not that PostgreSQL processing finished. 429 rate limits
+and 503 queue errors include Retry-After. Retries must reuse event IDs.
+
+The single API admission gate bounds unfinished work to 100 batch jobs, including
+active/delayed/paused jobs. Concurrent admission gets a retryable 503 rather than
+an in-memory waiting list. At most 60 attempts/project/minute. Do not bypass this
+gate with another API producer or manual job retries. On an uncertain enqueue
+acknowledgement, admission stops until the API is restarted; the job may already
+exist. Replay is safe because PostgreSQL uniquely identifies (projectId,eventId).
+
+Worker concurrency: 2; processing attempts: 3 with exponential backoff starting
+at 1 second. Permanent validation/constraint failures do not retry. Keep at most
+100 completed and 100 failed jobs; event stream is approximately trimmed to 1000.
+Failed jobs are not replayed automatically after exhausting their attempts.
+
+Redis: redis:7.4.11-alpine3.21, host 127.0.0.1:6380 by default (REDIS_PORT in root
+.env), named redis_data volume, AOF everysec, 128mb/noeviction. Local tooling builds
+a loopback REDIS_URL rather than using an unrelated URL from your environment.
+A clean Redis stop/start preserved a waiting job in verification. A crash can
+still lose recent acknowledged writes; no exactly-once or zero-loss claim is made.
+
+SDK defaults: 500 events including in-flight batches; newest-overflow drop;
+20 events/batch; partial flush every second; one sender; one-second HTTP timeout;
+three attempts; 250ms exponential backoff; Retry-After capped at five seconds;
+three-second best-effort shutdown flush. The demo uses a five-second send timeout
+and seven-second shutdown flush to tolerate local cold starts. Unsent memory
+buffers can be lost on crash, overflow, retries exhausted or shutdown deadline.
+stats().queued means accepted, not processed. No request bodies, credentials or
+raw sensitive query strings are captured. No disk spool/replay is implemented.
+
+Infrastructure commands:
+  npm run services:start  # start PostgreSQL and Redis, wait for health
+  npm run services:stop   # stop both, preserve named volumes
+  npm run redis:stop
+  npm run redis:start
+  npm run test:redis      # explicitly interrupts Redis to check clean-restart persistence
+
+Stop active demo traffic before test:redis. Its temporary queue is cleaned up;
+it does not delete the real telemetry queue or database records.
 
 Troubleshooting and data safety
 ------------------------------
@@ -178,9 +270,12 @@ Troubleshooting and data safety
 
 Tests
 -----
-npm test: 23 non-database checks pass as of this phase's implementation.
+npm test: 33 non-database checks (24 foundation/config and 9 SDK).
 npm run test:auth: 9 authentication tests pass against an isolated local schema.
 npm run test:projects: 11 project/key tests pass against an isolated local schema.
+npm run test:queue: 10 live queue/worker tests with isolated schemas/queue names.
+npm run test:sdk: the same 9 SDK tests included in npm test; do not count twice.
+npm run test:redis: clean service restart preserves a waiting job (not a crash-loss test).
 npm run typecheck: backend and Prisma scripts pass.
 npm run db:validate: Prisma schema validation passes.
 npm run test:db: all six live database verification groups passed with Docker/PostgreSQL.

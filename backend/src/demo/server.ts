@@ -9,6 +9,8 @@ const sdk = createTelemetrySDK({
   endpoint: process.env.DEMO_COLLECTOR_URL ?? 'http://127.0.0.1:3000/api/v1/telemetry/batch',
   apiKey: process.env.DEMO_API_KEY ?? process.env.SEED_API_KEY ?? '',
   service: process.env.DEMO_SERVICE ?? 'demo-api', environment: 'development',
+  // Allow local Docker/Node cold starts; general SDK defaults remain smaller.
+  timeoutMs: 5000,
 });
 const server = createDemoApp(sdk).listen(port, '127.0.0.1', () => {
   console.info(JSON.stringify({ event: 'demo_started', port }));
@@ -19,6 +21,6 @@ server.on('error', () => {
 });
 onShutdown(async () => {
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
-  await sdk.shutdown();
+  await sdk.shutdown(7000);
   console.info(JSON.stringify({ event: 'demo_stopped', ...sdk.stats() }));
 });
