@@ -25,6 +25,10 @@ jobs:
         working-directory: backend
       - run: npm run build && npm test
         working-directory: frontend
+      - run: npm pack
+        working-directory: sdk
+      - run: npm ci && npm test
+        working-directory: examples/external-express
       - run: docker compose -f compose.app.yaml up -d --build --wait
       - run: npx playwright install --with-deps chromium && npm run test:e2e
         working-directory: frontend

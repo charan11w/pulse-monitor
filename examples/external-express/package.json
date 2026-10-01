@@ -1,0 +1,7 @@
+{
+  "name": "pulsemonitor-external-example",
+  "private": true,
+  "type": "commonjs",
+  "scripts": { "start": "node server.cjs", "test": "node verify.cjs" },
+  "dependencies": { "express": "5.2.1", "@pulsemonitor/express-sdk": "file:../../sdk/pulsemonitor-express-sdk-0.1.0.tgz" }
+}

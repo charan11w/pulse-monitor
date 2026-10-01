@@ -7,7 +7,7 @@ export interface TelemetryOptions {
   endpoint: string;
   apiKey: string;
   service: string;
-  environment?: TelemetryEvent['environment'];
+  environment?: 'development' | 'test' | 'staging' | 'production';
   routePrefix?: string;
   bufferLimit?: number;
   batchSize?: number;

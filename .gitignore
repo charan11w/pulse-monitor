@@ -15,6 +15,9 @@ build/
 
 # Keep Markdown planning and learning files local.
 *.[mM][dD]
+!/README.md
+*.tgz
+dist-sdk/
 
 # Compiled Prisma seed and verification scripts
 dist-prisma/

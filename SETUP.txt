@@ -3,8 +3,9 @@ PulseMonitor - local telemetry analytics
 
 Current scope: React/TypeScript dashboard, sessions/projects/keys, bounded metrics
 APIs, Express SDK, Redis/BullMQ worker, PostgreSQL storage and live Socket.IO updates.
-No hosted services or cloud accounts are needed. All Markdown is intentionally
-ignored; this file is the public setup guide.
+No hosted services or cloud accounts are needed. README.md is now public by owner
+request; other Markdown planning/learning notes remain ignored. See README.md for
+the standalone SDK installation guide and examples/external-express for a second app.
 
 QUICK START: FULL APP IN DOCKER
 -----------------------------

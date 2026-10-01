@@ -1,0 +1,14 @@
+{
+  "name": "@pulsemonitor/express-sdk",
+  "version": "0.1.0",
+  "description": "Bounded Express request telemetry for a local PulseMonitor collector",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist/index.js", "dist/index.d.ts"],
+  "engines": { "node": ">=22.12.0" },
+  "scripts": { "build": "node ../backend/scripts/build-sdk.cjs", "prepack": "npm run build" },
+  "peerDependencies": { "express": "^5.0.0" },
+  "dependencies": { "@types/express": "^5.0.6" },
+  "license": "ISC"
+}

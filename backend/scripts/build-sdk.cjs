@@ -1,0 +1,10 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+const backend = path.resolve(__dirname, '..');
+const result = spawnSync(process.execPath, [path.join(backend, 'node_modules/typescript/bin/tsc'), '-p', 'tsconfig.sdk.json'], { cwd: backend, stdio: 'inherit', windowsHide: true });
+if (result.status !== 0) process.exit(result.status || 1);
+const output = path.resolve(backend, '../sdk/dist');
+fs.mkdirSync(output, { recursive: true });
+for (const file of ['index.js', 'index.d.ts']) fs.copyFileSync(path.join(backend, 'dist-sdk/sdk', file), path.join(output, file));
+console.log('Built standalone SDK in sdk/dist. Run npm pack in sdk to create the installable archive.');

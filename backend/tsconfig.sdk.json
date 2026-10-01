@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "outDir": "./dist-sdk", "declaration": true },
+  "include": ["src/sdk/index.ts"]
+}
