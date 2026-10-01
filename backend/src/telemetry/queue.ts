@@ -11,9 +11,9 @@ export function localRedisOptions(): RedisOptions {
   const value = process.env.REDIS_URL ?? 'redis://127.0.0.1:6380';
   let url: URL;
   try { url = new URL(value); } catch { throw new Error('Invalid REDIS_URL'); }
-  if (url.protocol !== 'redis:' || url.hostname !== '127.0.0.1' || url.username || url.password ||
+  if (url.protocol !== 'redis:' || !['127.0.0.1', ...(process.env.CONTAINER_MODE === '1' ? ['redis'] : [])].includes(url.hostname) || url.username || url.password ||
       (url.pathname && url.pathname !== '/') || url.search || url.hash) throw new Error('Invalid local REDIS_URL');
-  return { host: '127.0.0.1', port: Number(url.port || 6379), connectTimeout: 1000 };
+  return { host: url.hostname, port: Number(url.port || 6379), connectTimeout: 1000 };
 }
 
 export function createTelemetryQueue(connectionOptions: RedisOptions, name = QUEUE_NAME,

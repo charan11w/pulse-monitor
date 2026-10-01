@@ -1,4 +1,5 @@
 import express, { Router } from 'express';
+import { createMetricsRoutes } from './routes/metrics.route.js';
 import { database } from './config/database.js';
 import { FRONTEND_ORIGIN, NODE_ENV } from './config/env.js';
 import { createAuthRoutes } from './routes/auth.route.js';
@@ -15,6 +16,7 @@ const apiRoutes = Router();
 apiRoutes.use(healthRoutes);
 apiRoutes.use('/api/v1/auth', createAuthRoutes(database, FRONTEND_ORIGIN, NODE_ENV === 'production'));
 apiRoutes.use('/api/v1/projects', createProjectRoutes(database, FRONTEND_ORIGIN));
+apiRoutes.use('/api/v1/projects', createMetricsRoutes(database, FRONTEND_ORIGIN));
 apiRoutes.use('/api/v1/telemetry', createTelemetryRoutes(database, data => getTelemetryQueue().enqueue(data)));
 
 export function createApp(routes: Router = apiRoutes) {

@@ -22,6 +22,8 @@ dist-prisma/
 # OS files
 .DS_Store
 Thumbs.db
+test-results/
+playwright-report/
 
 # IDE
 .vscode/

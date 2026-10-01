@@ -1,9 +1,144 @@
-PulseMonitor - local setup (phase 6)
-===================================
+PulseMonitor - local telemetry analytics
+======================================
 
-Current scope: sessions/projects/keys, PostgreSQL, Redis/BullMQ ingestion and worker,
-plus an Express telemetry SDK and finite demo. Analytics, frontend and live charts
-remain later phases. No hosted services or cloud accounts are needed.
+Current scope: React/TypeScript dashboard, sessions/projects/keys, bounded metrics
+APIs, Express SDK, Redis/BullMQ worker, PostgreSQL storage and live Socket.IO updates.
+No hosted services or cloud accounts are needed. All Markdown is intentionally
+ignored; this file is the public setup guide.
+
+QUICK START: FULL APP IN DOCKER
+-----------------------------
+Install Node.js 22.12+ and Docker Desktop with Linux containers. From the cloned
+repository, run these commands (initial dependency/image downloads need internet):
+
+  cd backend
+  npm ci
+  npm run db:init
+  cd ..
+  docker compose -f compose.app.yaml up -d --build --wait
+
+Open http://localhost:5173 (use localhost, not 127.0.0.1, for the browser origin).
+Sign in as demo@pulsemonitor.local using SEED_PASSWORD from the root .env file.
+db:init creates random credentials and never overwrites an existing .env. Keep
+this file private. Initial migrations and an idempotent seed run automatically
+through the initialize service before API/worker startup. Five seed events appear
+on a first setup; existing seed events keep their original timestamps.
+
+Generate finite normal/slow/500 traffic:
+  docker compose -f compose.app.yaml --profile demo up -d demo
+  docker compose -f compose.app.yaml exec demo node dist/demo/run-traffic.js
+
+The default sends 30 requests: ten each to /items/:id, /slow and /fail. The worker
+commits events, then live charts refetch. Choose Demo API and Last hour. You may
+run the finite command again. It does not continuously generate traffic.
+If the seed key was revoked, create a replacement in Projects & keys and configure
+DEMO_API_KEY for the demo service; never reset your database just to recover a key.
+
+Normal stop/start (preserves data):
+  docker compose -f compose.app.yaml --profile demo stop
+  docker compose -f compose.app.yaml up -d --wait
+
+The full app uses pulsemonitor-app volumes, separate from the host-development
+compose.yaml volumes. PostgreSQL and Redis are internal in the full app. Browser
+port 5173 and ingestion/API port 3000 bind only to localhost. APP_PORT and API_PORT
+can be set in root .env if ports conflict; FRONTEND_ORIGIN follows APP_PORT.
+NODE_ENV=development is deliberate for local HTTP cookies. This is not an HTTPS
+production deployment configuration. One API and one worker are supported.
+
+Architecture:
+  Express request -> SDK memory buffer -> HTTP batch -> API key + validation
+    -> Redis/BullMQ -> independent worker -> PostgreSQL commit
+    -> Redis Pub/Sub -> authorized Socket.IO room -> React refetches REST metrics
+
+Dashboard:
+- Login/logout, select/create projects, create/list/revoke telemetry keys.
+- Counts, requests/sec, 5xx percentage, weighted mean latency, minute charts and
+  endpoint pages; 15-minute, 1-hour, 6-hour and 24-hour windows.
+- Loading/empty/error/session-expired states, responsive layout, keyboard focus,
+  manual refresh, live connection state and REST recovery after reconnect.
+- The small workspace UI shows up to 50 projects and the latest 50 keys.
+
+Metrics contract:
+  GET /api/v1/projects/:id/metrics/overview?from=<ISO>&to=<ISO>
+  GET /api/v1/projects/:id/metrics/series?from=<ISO>&to=<ISO>
+  GET /api/v1/projects/:id/metrics/endpoints?from=<ISO>&to=<ISO>&page=1&pageSize=20
+Browser session and project ownership are required. UTC [from,to) ranges are at
+most 24 hours. Rate=count/window seconds; errorRate is a 0-100 percentage of 5xx.
+Latency is milliseconds, null for no data. Minute buckets include zeros and use
+actual overlapping seconds for partial-minute rates. Endpoint pageSize <=50,
+page <=1000; minute series <=1441 points. Queries are parameterized SQL.
+
+Important limits:
+- HTTP 202 means queued, not processed. Delivery/retries are at least once;
+  project+eventId uniqueness prevents duplicate rows. Never claim exactly once.
+- SDK buffering is memory-only and can lose events on exit/overflow/retry exhaustion.
+- Redis AOF everysec can lose roughly the latest second on a crash; no zero-loss
+  claim. Pub/Sub notifications are best-effort. Reconnect/manual refresh use REST.
+- No percentile pipeline, alerts, AI, distributed scaling or performance benchmark
+  claims. Raw telemetry grows until you run the explicit retention command below.
+
+Retention (preview first; applies to all local projects):
+  docker compose -f compose.app.yaml exec api node scripts/retention.cjs 7
+  docker compose -f compose.app.yaml exec api node scripts/retention.cjs 7 --apply
+The second command irreversibly deletes events older than seven days. It keeps
+projects, accounts and keys. Change 7 to a whole number from 1 to 365.
+Destructive reset: docker compose -f compose.app.yaml --profile demo down -v
+Only use that if you intentionally want to delete this full app's database and
+queue volumes. Ordinary stop/down without -v preserves volumes.
+
+Verification commands:
+  cd backend
+  npm run services:start
+  npm run db:generate
+  npm run db:migrate
+  npm run typecheck
+  npm test
+  npm run test:auth
+  npm run test:projects
+  npm run test:queue
+  npm run test:metrics
+  npm run test:live
+  cd ../frontend
+  npm ci
+  npm run build
+  npm test
+  npx playwright install chromium
+  npm run test:e2e
+E2E expects the full Docker app at localhost:5173 and backend compiled first.
+It creates a demo project/key, sends SDK traffic, checks live charts/reconnect,
+revokes its key, and saves desktop/mobile screenshots under artifacts/. It leaves
+its project/events for inspection. APP_URL overrides its browser target.
+GitHub Actions runs these checks and container/browser verification. Local results
+do not prove a hosted Actions run; check the Actions tab after pushing.
+
+Troubleshooting:
+- Docker pipe/engine errors: open Docker Desktop and wait for Engine running.
+- Port conflict: stop another local API/Vite process or change APP_PORT/API_PORT.
+- Empty charts: select the right project/time window, generate traffic, inspect
+  docker compose -f compose.app.yaml logs --tail 30 worker api, then Refresh.
+- Offline indicator: use the configured localhost origin, allow WebSockets and
+  check the API/Redis containers. Manual Refresh still works without live updates.
+- Expired session: sign in again; a new login invalidates the previous session.
+- Keys are shown only once. Create another if lost; revoke keys no longer needed.
+- Credentials changed after initialization? Seed intentionally does not overwrite
+  an existing password/key. Use the original root .env for that database volume.
+
+Five honest resume themes (only describe your own understanding):
+1. Built a responsive React/TypeScript telemetry dashboard with charts, time
+   filters, endpoint metrics and authenticated project/key management.
+2. Implemented bounded BullMQ ingestion and an independent PostgreSQL worker with
+   retries and project-scoped event deduplication.
+3. Developed an Express telemetry SDK with normalized routes, bounded batching,
+   timeouts and failure isolation from monitored requests.
+4. Added authorized Socket.IO updates after database commits, coalesced refreshes
+   and REST recovery after reconnect.
+5. Packaged the local stack with Docker Compose, migrations/seed, automated tests
+   and a GitHub Actions workflow; documented a reproducible finite demo.
+
+HOST DEVELOPMENT AND EARLIER FEATURE EXERCISES
+--------------------------------------------
+The following instructions use compose.yaml for host PostgreSQL/Redis and Node
+processes, rather than the independent full-app database above.
 Phase 2 verified: local PostgreSQL startup, migrations, repeatable seed, constraints and stop/start persistence all passed.
 
 Prerequisites

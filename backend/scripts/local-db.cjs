@@ -78,6 +78,8 @@ function main(action) {
     case 'demo-traffic': return run(process.execPath, ['dist/demo/run-traffic.js'], env);
     case 'demo': return run(process.execPath, ['scripts/demo.cjs'], env);
     case 'queue-test': return run(process.execPath, ['--test', 'tests/integration/queue.test.cjs'], env);
+    case 'metrics-test': return run(process.execPath, ['--test', 'tests/integration/metrics.test.cjs'], env);
+    case 'live-test': return run(process.execPath, ['--test', 'tests/integration/live.test.cjs'], env);
     case 'redis-verify': return run(process.execPath, ['scripts/verify-redis.cjs'], env);
     case 'services-start': return run('docker', [...compose, 'up', '-d', '--wait', 'postgres', 'redis'], env);
     case 'services-stop': return run('docker', [...compose, 'stop', 'postgres', 'redis'], env);

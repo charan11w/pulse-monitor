@@ -2,7 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import { UnrecoverableError, type Job } from 'bullmq';
 import { jobSchema, type TelemetryJob } from './schema.js';
 
-export function createProcessor(db: PrismaClient) {
+export function createProcessor(db: PrismaClient, notify?: (projectId: string) => Promise<unknown>) {
   return async (job: Job<TelemetryJob>) => {
     const parsed = jobSchema.safeParse(job.data);
     if (!parsed.success) throw new UnrecoverableError('INVALID_JOB');
@@ -12,7 +12,8 @@ export function createProcessor(db: PrismaClient) {
         data: events.map(event => ({ ...event, projectId, timestamp: new Date(event.timestamp) })),
         skipDuplicates: true,
       });
-      // createMany is one atomic statement. Notification will be added after this commit in phase 9.
+      // Notification failure must never turn a committed write into a failed job.
+      if (notify) { try { await notify(projectId); } catch { /* REST recovers missed updates. */ } }
       return { inserted: result.count, received: events.length };
     } catch (error) {
       const code = error && typeof error === 'object' && 'code' in error ? error.code : '';

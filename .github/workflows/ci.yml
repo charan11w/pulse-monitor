@@ -1,0 +1,39 @@
+name: Local portfolio checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - run: npm ci
+        working-directory: backend
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run db:init && npm run services:start && npm run db:generate && npm run db:migrate
+        working-directory: backend
+      - run: npm run typecheck && npm test && npm run test:auth && npm run test:projects && npm run test:queue && npm run test:metrics && npm run test:live
+        working-directory: backend
+      - run: npm run build && npm test
+        working-directory: frontend
+      - run: docker compose -f compose.app.yaml up -d --build --wait
+      - run: npx playwright install --with-deps chromium && npm run test:e2e
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dashboard-evidence
+          path: |
+            artifacts/*.png
+            frontend/test-results/
+      - if: always()
+        run: docker compose -f compose.app.yaml down && docker compose down

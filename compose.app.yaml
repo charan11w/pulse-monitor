@@ -1,0 +1,91 @@
+zname: pulsemonitor-app
+x-backend: &backend
+  build: ./backend
+  environment: &environment
+    DATABASE_URL: postgresql://pulsemonitor:${POSTGRES_PASSWORD:?Run backend db:init}@postgres:5432/pulsemonitor?schema=public
+    REDIS_URL: redis://redis:6379
+    CONTAINER_MODE: "1"
+    NODE_ENV: development
+    FRONTEND_ORIGIN: http://localhost:${APP_PORT:-5173}
+    SEED_PASSWORD: ${SEED_PASSWORD:?Run backend db:init}
+    SEED_API_KEY: ${SEED_API_KEY:?Run backend db:init}
+  init: true
+  stop_grace_period: 15s
+services:
+  postgres:
+    image: postgres:17.11-alpine3.23
+    environment:
+      POSTGRES_USER: pulsemonitor
+      POSTGRES_DB: pulsemonitor
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U pulsemonitor -d pulsemonitor"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7.4.11-alpine3.21
+    command:
+      [
+        redis-server,
+        --appendonly,
+        "yes",
+        --appendfsync,
+        everysec,
+        --maxmemory,
+        128mb,
+        --maxmemory-policy,
+        noeviction,
+      ]
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  initialize:
+    <<: *backend
+    command: [node, scripts/container-init.cjs]
+    depends_on:
+      postgres: { condition: service_healthy }
+  api:
+    <<: *backend
+    ports: ["127.0.0.1:${API_PORT:-3000}:3000"]
+    depends_on:
+      initialize: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  worker:
+    <<: *backend
+    command: [node, dist/worker.js]
+    depends_on:
+      initialize: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+  frontend:
+    build: ./frontend
+    ports: ["127.0.0.1:${APP_PORT:-5173}:80"]
+    depends_on:
+      api: { condition: service_healthy }
+  demo:
+    <<: *backend
+    profiles: [demo]
+    command: [node, dist/demo/server.js]
+    environment:
+      <<: *environment
+      DEMO_COLLECTOR_URL: http://api:3000/api/v1/telemetry/batch
+    depends_on:
+      api: { condition: service_healthy }
+volumes:
+  postgres_data:
+  redis_data:

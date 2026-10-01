@@ -1,0 +1,20 @@
+PulseMonitor local verification, completed 2026-10-01
+
+65 backend tests: 33 foundation/config/SDK, 9 auth, 11 project/key, 10 queue,
+1 analytics integration and 1 live integration. Four React behavior tests and
+one real Chromium workflow. Total 70; reruns and SDK subsets are not double-counted.
+Backend typecheck/build and frontend build passed. Docker images built and a fresh
+full-app database initialized without altering the existing development volumes.
+
+Browser workflow: login, project/key creation, real Express SDK telemetry through
+Docker API/queue/worker/database, live charts, offline/reconnect REST recovery,
+key revocation, logout, narrow layout and keyboard focus. Screenshots are included.
+
+Ordinary stop/start: restart-before.json and restart-after.json match exactly.
+Warm finite container demo: 30 requests; 30 additional stored events (40 -> 70).
+SDK captured=30, queued=30, dropped=0, retryAttempts=0.
+An earlier interrupted run lost an event; this project does not promise zero loss.
+Retention preview verified; no destructive retention or volume reset performed.
+
+GitHub Actions workflow is configured. A hosted run has not been performed here.
+These functional demo counts are not throughput/performance benchmarks.
